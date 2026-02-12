@@ -33,7 +33,7 @@ const SECRETARIAS = [
 ];
 
 const LISTA_ORGAOS = [
-  { nome: "Prefeitura Municipal de Almadina", url: "https://almadina.compras.app.br/", cidade: "Almadina", uf: "BA" },
+  { nome: "PREFEITURA MUNICIPAL DE ALMADINA", url: "https://almadina.compras.app.br/", cidade: "Almadina", uf: "BA" },
   { nome: "Prefeitura Municipal de Anagé", url: "https://anage.compras.app.br/", cidade: "Anagé", uf: "BA" },
   { nome: "Câmara Municipal de Anagé", url: "https://camaraanage.compras.app.br/", cidade: "Anagé", uf: "BA" },
   { nome: "Prefeitura Municipal de Apuarema", url: "https://apuarema.compras.app.br/", cidade: "Apuarema", uf: "BA" },
