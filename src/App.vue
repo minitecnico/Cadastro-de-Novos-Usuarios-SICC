@@ -89,8 +89,8 @@ const orgaosFiltrados = computed(() => {
 
 const processarArquivo = (file) => {
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) {
-    alert("O arquivo excede o limite de 5MB.");
+  if (file.size > 8 * 1024 * 1024) {
+    alert("O arquivo excede o limite de 8MB.");
     return;
   }
   arquivoOriginal.value = file;
@@ -174,14 +174,14 @@ const exportarCSV = async () => {
       <div v-if="FINALIZADO" class="success-screen">
         <div class="alert-box">
           <h2>Bem vindo ao SICC📄</h2>
-          <p> O seu cadastro foi realizado com sucesso🎉!</p>
+          <p>O seu cadastro foi realizado com sucesso🎉!</p>
           <div class="credentials">
             <p><strong>Link:</strong> <a v-if="form.orgaoUrl" :href="form.orgaoUrl" target="_blank">{{ form.orgaoUrl }}</a><span v-else>Link não disponível</span></p>
             <p><strong>Login:</strong> {{ form.cpf }} | <strong>Senha:</strong> 123456</p>
           </div>
           <div class="btn-group">
-            <button @click="disable" class="btn-pdf">📥 PDF</button>
-            <button @click="disable" class="btn-csv">📊 PLANILHA</button>
+            <button @click="gerarPDF" class="btn-pdf">📥 PDF</button>
+            <button @click="exportarCSV" class="btn-csv">📊 PLANILHA</button>
             <button @click="reset" class="btn-new">NOVO</button>
           </div>
         </div>
@@ -222,41 +222,42 @@ const exportarCSV = async () => {
         <input v-model="form.cargo" required class="full-input" placeholder="CARGO / FUNÇÃO">
 
         <section class="signature-section">
-  <div class="signature-header">
-    <h2>✍🏼 Assinatura do Usuário <span class="req">*</span></h2>
-    <p class="instructions-text">Assine em papel branco, tire uma foto nítida e anexe abaixo.</p>
-  </div>
+          <div class="signature-header">
+            <h2>✍🏼 Assinatura do Usuário <span class="req">*</span></h2>
+            <p class="instructions-text">Assine em papel branco, tire uma foto nítida e anexe abaixo.</p>
+          </div>
 
-  <div 
-    class="upload-container" 
-    :class="{ 'has-file': arquivoOriginal, 'drag-active': dragAtivo }"
-    @dragover.prevent="dragAtivo = true"
-    @dragleave.prevent="dragAtivo = false"
-    @drop.prevent="handleDrop"
-  >
-    <div v-if="!arquivoPreview" class="upload-placeholder">
-      <div class="dashed-box">
-        <svg class="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-        </svg>
-        <p>Tamanho max. 6MB</p>
-        <p class="sub-text">Toque para selecionar</p>
-      </div>
-    </div>
+          <div 
+            class="upload-container" 
+            :class="{ 'has-file': arquivoOriginal, 'drag-active': dragAtivo }"
+            @dragover.prevent="dragAtivo = true"
+            @dragleave.prevent="dragAtivo = false"
+            @drop.prevent="handleDrop"
+          >
+            <div v-if="!arquivoPreview" class="upload-placeholder">
+              <div class="dashed-box">
+                <svg class="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                </svg>
+                <p>Tamanho max. 8MB</p>
+                <p class="sub-text">Toque para selecionar</p>
+              </div>
+            </div>
 
-    <div v-else class="preview-container">
-      <img :src="arquivoPreview" class="signature-preview">
-      <button type="button" @click="resetArquivo" class="btn-remove">✕</button>
-    </div>
+            <div v-else class="preview-container">
+              <img :src="arquivoPreview" class="signature-preview">
+              <button type="button" @click="resetArquivo" class="btn-remove">✕</button>
+            </div>
 
-    <div class="upload-controls">
-      <label class="btn-upload">
-        <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
-        <span>{{ arquivoOriginal ? 'ALTERAR ASSINATURA' : 'SELECIONAR' }}</span>
-      </label>
-      <div v-if="arquivoNome" class="file-info">{{ arquivoNome }}</div>
-    </div>
-  </div>
+            <div class="upload-controls">
+              <label class="btn-upload">
+                <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
+                <span>{{ arquivoOriginal ? 'ALTERAR ASSINATURA' : 'SELECIONAR' }}</span>
+              </label>
+              <div v-if="arquivoNome" class="file-info">{{ arquivoNome }}</div>
+            </div>
+          </div>
+        </section>
 
         <button type="submit" :disabled="carregando" class="btn-submit">
           <span v-if="!carregando">FINALIZAR CADASTRO</span>
