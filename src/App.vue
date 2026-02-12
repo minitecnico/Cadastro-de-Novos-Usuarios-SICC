@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 
 // --- ESTADOS E REATIVIDADE ---
 const FINALIZADO = ref(false);
+const carregando = ref(false); // Adicionado para animação
 const arquivoOriginal = ref(null);
 const arquivoNome = ref('');
 const arquivoPreview = ref(null);
@@ -15,7 +16,7 @@ const form = ref({
   email: '', 
   telefone: '', 
   uf: '', 
-  cidade: '', // Corrigido para bater com o template
+  cidade: '', 
   orgao: '', 
   orgaoUrl: '', 
   secretaria: '', 
@@ -96,6 +97,12 @@ const handleFileUpload = (e) => {
 };
 
 const finalizar = async () => {
+  if (!arquivoOriginal.value) {
+    alert("Por favor, anexe a sua assinatura.");
+    return;
+  }
+  
+  carregando.value = true;
   try {
     let assinaturaUrl = null;
     if (arquivoOriginal.value) {
@@ -113,6 +120,8 @@ const finalizar = async () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (err) {
     alert("Erro ao salvar: " + err.message);
+  } finally {
+    carregando.value = false;
   }
 };
 
@@ -121,6 +130,7 @@ const reset = () => {
   arquivoPreview.value = null; 
   arquivoOriginal.value = null;
   arquivoNome.value = ''; 
+  form.value = { nome: '', cpf: '', email: '', telefone: '', uf: '', cidade: '', orgao: '', orgaoUrl: '', secretaria: '', cargo: '' };
 };
 
 const gerarPDF = () => {
@@ -128,7 +138,22 @@ const gerarPDF = () => {
   doc.text("Comprovante de Cadastro SICC", 20, 20);
   doc.text(`Nome: ${form.value.nome}`, 20, 40);
   doc.text(`Órgão: ${form.value.orgao}`, 20, 50);
+  doc.text(`Link: ${form.value.orgaoUrl}`, 20, 60);
   doc.save(`cadastro_${form.value.cpf}.pdf`);
+};
+
+const exportarCSV = async () => {
+  const { data, error } = await supabase.from('cadastros_sicc').select('*');
+  if (error) { alert("Erro ao exportar: " + error.message); return; }
+  const headers = ["Nome", "CPF", "Email", "Telefone", "Cidade", "Orgao", "Secretaria", "Cargo", "Data"];
+  const rows = data.map(i => [i.nome, i.cpf, i.email, i.telefone, i.cidade, i.orgao, i.secretaria, i.cargo, new Date(i.criado_em).toLocaleDateString('pt-BR')]);
+  let csv = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(";") + "\r\n" + rows.map(r => r.join(";")).join("\r\n");
+  const link = document.createElement("a");
+  link.setAttribute("href", encodeURI(csv));
+  link.setAttribute("download", "cadastros_sicc.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 </script>
 
@@ -144,11 +169,12 @@ const gerarPDF = () => {
           <h2>⚠️ ATENÇÃO</h2>
           <p>O cadastro do usuário e a liberação de acesso foram realizados.</p>
           <div class="credentials">
-            <p><strong>Link:</strong> <a :href="form.orgaoUrl" target="_blank">{{ form.orgaoUrl }}</a></p>
+            <p><strong>Link:</strong> <a v-if="form.orgaoUrl" :href="form.orgaoUrl" target="_blank">{{ form.orgaoUrl }}</a><span v-else>Link não disponível</span></p>
             <p><strong>Login:</strong> {{ form.cpf }} | <strong>Senha:</strong> 123456</p>
           </div>
           <div class="btn-group">
             <button @click="gerarPDF" class="btn-pdf">📥 BAIXAR PDF</button>
+            <button @click="exportarCSV" class="btn-csv">📊 PLANILHA</button>
             <button @click="reset" class="btn-new">NOVO CADASTRO</button>
           </div>
         </div>
@@ -167,7 +193,7 @@ const gerarPDF = () => {
             <option value="">UF</option>
             <option v-for="u in ufs" :key="u.id" :value="u.sigla">{{ u.sigla }}</option>
           </select>
-          <input v-model="form.cidade" list="cids" required placeholder="CIDADE">
+          <input v-model="form.cidade" list="cids" required placeholder="CIDADE (SELECIONE OU DIGITE NOVA)">
           <datalist id="cids">
             <option v-for="c in cidades" :key="c.id" :value="c.nome" />
           </datalist>
@@ -189,7 +215,7 @@ const gerarPDF = () => {
               @click="form.secretaria = s"
               :class="{ active: form.secretaria === s }">{{ s }}</button>
           </div>
-          <input v-model="form.secretaria" class="full-input" placeholder="OU DIGITE A SECRETARIA">
+          <input v-model="form.secretaria" required class="full-input" placeholder="OU DIGITE A SECRETARIA">
         </div>
 
         <input v-model="form.cargo" required class="full-input" placeholder="CARGO / FUNÇÃO">
@@ -210,7 +236,7 @@ const gerarPDF = () => {
             <p>PDF, Document ou Imagem (Máx 10 MB).</p>
             <div class="upload-action">
               <label class="btn-file">
-                <input type="file" hidden @change="handleFileUpload">
+                <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
                 <span>⤒ Adicionar arquivo</span>
               </label>
               <span v-if="arquivoNome" class="file-name">{{ arquivoNome }}</span>
@@ -219,14 +245,16 @@ const gerarPDF = () => {
           </div>
         </section>
 
-        <button type="submit" class="btn-submit">FINALIZAR CADASTRO</button>
+        <button type="submit" :disabled="carregando" class="btn-submit">
+          <span v-if="!carregando">FINALIZAR CADASTRO</span>
+          <span v-else class="loader"></span>
+        </button>
       </form>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Estilos mantidos conforme sua identidade visual */
 .page-bg { background: #f1f5f9; min-height: 100vh; padding: 40px 20px; font-family: 'Inter', sans-serif; }
 .main-card { max-width: 750px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; }
 .banner { background: #2563eb; padding: 35px; text-align: center; }
@@ -240,44 +268,35 @@ input, select { padding: 14px; border: 1px solid #e2e8f0; border-radius: 10px; w
 .full-input { width: 100%; margin-bottom: 20px; box-sizing: border-box; }
 
 .selection-area label { display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 10px; text-align: left; }
-
-.selection-area button { 
-  padding: 12px 15px; 
-  border: 1px solid #e2e8f0; 
-  border-radius: 8px; 
-  background: white; 
-  cursor: pointer; 
-  font-size: 11px; 
-  text-align: left; 
-  display: flex; 
-  align-items: center; 
-  justify-content: flex-start;
-  width: 100%;
-}
-
+.selection-area button { padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; cursor: pointer; font-size: 11px; text-align: left; width: 100%; }
 .selection-area button.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; font-weight: 600; }
+
 .signature-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 15px; padding: 25px; margin-bottom: 30px; text-align: left;}
-.signature-section h2 { font-size: 14px; margin: 0; }
 .req { color: red; }
 ol { font-size: 13px; color: #64748b; font-style: italic; padding-left: 20px; }
 .upload-zone { display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 15px; }
 .icon-file { width: 60px; stroke: #000; fill: none; margin-bottom: 10px; }
 .btn-file { border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 8px; cursor: pointer; color: #2563eb; font-weight: 600; background: #fff; }
 .preview { height: 60px; margin-top: 15px; border: 1px solid #ddd; padding: 4px; background: #fff; }
-.btn-submit { width: 100%; padding: 20px; background: #2563eb; color: white; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; }
+
+.btn-submit { width: 100%; padding: 20px; background: #2563eb; color: white; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+.btn-submit:disabled { background: #94a3b8; cursor: not-allowed; }
+
+.loader { width: 20px; height: 20px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
+@keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 .success-screen { padding: 40px; }
 .alert-box { background: #fffbeb; border: 1px solid #fde68a; padding: 25px; border-radius: 15px; text-align: left; }
 .credentials { background: white; padding: 15px; border-radius: 10px; margin: 15px 0; border: 1px solid #eee; }
 .btn-group { display: flex; gap: 10px; }
 .btn-pdf { flex: 1; padding: 15px; background: #059669; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+.btn-csv { flex: 1; padding: 15px; background: #1e293b; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
 .btn-new { flex: 1; padding: 15px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
 .file-name { font-size: 11px; color: #2563eb; margin-top: 5px; }
 
 @media (max-width: 600px) {
   .grid-2 { grid-template-columns: 1fr; }
   .grid-location { grid-template-columns: 70px 1fr; }
-  .form-body { padding: 20px; }
   .btn-group { flex-direction: column; }
 }
 </style>
