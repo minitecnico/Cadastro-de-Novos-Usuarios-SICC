@@ -5,7 +5,9 @@ import { supabase } from './supabase';
 
 // --- ESTADOS E REATIVIDADE ---
 const FINALIZADO = ref(false);
-const carregando = ref(false); // Adicionado para animação
+const carregando = ref(false);
+const dragAtivo = ref(false);
+
 const arquivoOriginal = ref(null);
 const arquivoNome = ref('');
 const arquivoPreview = ref(null);
@@ -33,7 +35,7 @@ const SECRETARIAS = [
 ];
 
 const LISTA_ORGAOS = [
-  { nome: "PREFEITURA MUNICIPAL DE ALMADINA", url: "https://almadina.compras.app.br/", cidade: "Almadina", uf: "BA" },
+  { nome: "Prefeitura Municipal de Almadina", url: "https://almadina.compras.app.br/", cidade: "Almadina", uf: "BA" },
   { nome: "Prefeitura Municipal de Anagé", url: "https://anage.compras.app.br/", cidade: "Anagé", uf: "BA" },
   { nome: "Câmara Municipal de Anagé", url: "https://camaraanage.compras.app.br/", cidade: "Anagé", uf: "BA" },
   { nome: "Prefeitura Municipal de Apuarema", url: "https://apuarema.compras.app.br/", cidade: "Apuarema", uf: "BA" },
@@ -85,41 +87,50 @@ const orgaosFiltrados = computed(() => {
   return LISTA_ORGAOS.filter(o => o.cidade.toLowerCase() === form.value.cidade.toLowerCase() && o.uf === form.value.uf);
 });
 
-const handleFileUpload = (e) => {
-  const file = e.target.files[0];
-  if (file && file.size <= 10 * 1024 * 1024) {
-    arquivoOriginal.value = file;
-    arquivoNome.value = file.name;
-    if (file.type.startsWith('image/')) arquivoPreview.value = URL.createObjectURL(file);
-  } else if (file) {
-    alert("O arquivo excede 10MB.");
+const processarArquivo = (file) => {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    alert("O arquivo excede o limite de 5MB.");
+    return;
+  }
+  arquivoOriginal.value = file;
+  arquivoNome.value = file.name;
+  if (file.type.startsWith('image/')) {
+    arquivoPreview.value = URL.createObjectURL(file);
+  } else {
+    arquivoPreview.value = 'https://cdn-icons-png.flaticon.com/512/337/337946.png';
   }
 };
 
+const handleFileUpload = (e) => processarArquivo(e.target.files[0]);
+const handleDrop = (e) => { dragAtivo.value = false; processarArquivo(e.dataTransfer.files[0]); };
+const resetArquivo = () => { arquivoOriginal.value = null; arquivoNome.value = ''; arquivoPreview.value = null; };
+
 const finalizar = async () => {
-  if (!arquivoOriginal.value) {
-    alert("Por favor, anexe a sua assinatura.");
-    return;
-  }
-  
+  if (!form.value.orgao) return alert("Selecione o Órgão Vinculado!");
+  if (!form.value.secretaria) return alert("Selecione ou digite a Secretaria!");
+  if (!arquivoOriginal.value) return alert("A assinatura é obrigatória!");
+
   carregando.value = true;
   try {
     let assinaturaUrl = null;
-    if (arquivoOriginal.value) {
-      const fileExt = arquivoOriginal.value.name.split('.').pop();
-      const fileName = `${form.value.cpf}_${Date.now()}.${fileExt}`;
-      const filePath = `public/${fileName}`;
-      const { error: uploadError } = await supabase.storage.from('assinaturas').upload(filePath, arquivoOriginal.value);
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('assinaturas').getPublicUrl(filePath);
-      assinaturaUrl = urlData.publicUrl;
-    }
+    const fileExt = arquivoOriginal.value.name.split('.').pop();
+    const fileName = `${form.value.cpf}_${Date.now()}.${fileExt}`;
+    const filePath = `public/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage.from('assinaturas').upload(filePath, arquivoOriginal.value);
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage.from('assinaturas').getPublicUrl(filePath);
+    assinaturaUrl = urlData.publicUrl;
+
     const { error: dbError } = await supabase.from('cadastros_sicc').insert([{ ...form.value, assinatura_url: assinaturaUrl }]);
     if (dbError) throw dbError;
+
     FINALIZADO.value = true;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (err) {
-    alert("Erro ao salvar: " + err.message);
+    alert("Erro: " + err.message);
   } finally {
     carregando.value = false;
   }
@@ -127,9 +138,7 @@ const finalizar = async () => {
 
 const reset = () => { 
   FINALIZADO.value = false; 
-  arquivoPreview.value = null; 
-  arquivoOriginal.value = null;
-  arquivoNome.value = ''; 
+  resetArquivo();
   form.value = { nome: '', cpf: '', email: '', telefone: '', uf: '', cidade: '', orgao: '', orgaoUrl: '', secretaria: '', cargo: '' };
 };
 
@@ -144,16 +153,14 @@ const gerarPDF = () => {
 
 const exportarCSV = async () => {
   const { data, error } = await supabase.from('cadastros_sicc').select('*');
-  if (error) { alert("Erro ao exportar: " + error.message); return; }
-  const headers = ["Nome", "CPF", "Email", "Telefone", "Cidade", "Orgao", "Secretaria", "Cargo", "Data"];
-  const rows = data.map(i => [i.nome, i.cpf, i.email, i.telefone, i.cidade, i.orgao, i.secretaria, i.cargo, new Date(i.criado_em).toLocaleDateString('pt-BR')]);
+  if (error) return alert(error.message);
+  const headers = ["Nome", "CPF", "Cidade", "Orgao", "Secretaria", "Data"];
+  const rows = data.map(i => [i.nome, i.cpf, i.cidade, i.orgao, i.secretaria, new Date(i.criado_em).toLocaleDateString()]);
   let csv = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(";") + "\r\n" + rows.map(r => r.join(";")).join("\r\n");
   const link = document.createElement("a");
   link.setAttribute("href", encodeURI(csv));
-  link.setAttribute("download", "cadastros_sicc.csv");
-  document.body.appendChild(link);
+  link.setAttribute("download", "relatorio.csv");
   link.click();
-  document.body.removeChild(link);
 };
 </script>
 
@@ -166,16 +173,16 @@ const exportarCSV = async () => {
 
       <div v-if="FINALIZADO" class="success-screen">
         <div class="alert-box">
-          <h2>⚠️ ATENÇÃO</h2>
-          <p>O cadastro do usuário e a liberação de acesso foram realizados.</p>
+          <h2>Bem vindo ao SICC📄</h2>
+          <p> O seu cadastro foi realizado com sucesso🎉!</p>
           <div class="credentials">
             <p><strong>Link:</strong> <a v-if="form.orgaoUrl" :href="form.orgaoUrl" target="_blank">{{ form.orgaoUrl }}</a><span v-else>Link não disponível</span></p>
             <p><strong>Login:</strong> {{ form.cpf }} | <strong>Senha:</strong> 123456</p>
           </div>
           <div class="btn-group">
-            <button @click="disabled" class="btn-pdf"> </button>
-            <button @click="disabled" class="btn-csv"> </button>
-            <button @click="reset" class="btn-new">NOVO CADASTRO</button>
+            <button @click="disable" class="btn-pdf">📥 PDF</button>
+            <button @click="disable" class="btn-csv">📊 PLANILHA</button>
+            <button @click="reset" class="btn-new">NOVO</button>
           </div>
         </div>
       </div>
@@ -193,27 +200,21 @@ const exportarCSV = async () => {
             <option value="">UF</option>
             <option v-for="u in ufs" :key="u.id" :value="u.sigla">{{ u.sigla }}</option>
           </select>
-          <input v-model="form.cidade" list="cids" required placeholder="CIDADE (SELECIONE OU DIGITE NOVA)">
-          <datalist id="cids">
-            <option v-for="c in cidades" :key="c.id" :value="c.nome" />
-          </datalist>
+          <input v-model="form.cidade" list="cids" required placeholder="CIDADE (OU DIGITE NOVA)">
+          <datalist id="cids"><option v-for="c in cidades" :key="c.id" :value="c.nome" /></datalist>
         </div>
 
         <div v-if="orgaosFiltrados.length" class="selection-area">
-          <label>SELECIONE O ÓRGÃO VINCULADO:</label>
+          <label>ÓRGÃO VINCULADO: <span class="req">*</span></label>
           <div class="grid-2">
-            <button v-for="o in orgaosFiltrados" :key="o.nome" type="button" 
-              @click="form.orgao = o.nome; form.orgaoUrl = o.url"
-              :class="{ active: form.orgao === o.nome }">{{ o.nome }}</button>
+            <button v-for="o in orgaosFiltrados" :key="o.nome" type="button" @click="form.orgao = o.nome; form.orgaoUrl = o.url" :class="{ active: form.orgao === o.nome }">{{ o.nome }}</button>
           </div>
         </div>
 
         <div class="selection-area">
-          <label>FAÇO PARTE DA SECRETARIA DE:</label>
+          <label>SECRETARIA: <span class="req">*</span></label>
           <div class="grid-2">
-            <button v-for="s in SECRETARIAS" :key="s" type="button" 
-              @click="form.secretaria = s"
-              :class="{ active: form.secretaria === s }">{{ s }}</button>
+            <button v-for="s in SECRETARIAS" :key="s" type="button" @click="form.secretaria = s" :class="{ active: form.secretaria === s }">{{ s }}</button>
           </div>
           <input v-model="form.secretaria" required class="full-input" placeholder="OU DIGITE A SECRETARIA">
         </div>
@@ -221,27 +222,26 @@ const exportarCSV = async () => {
         <input v-model="form.cargo" required class="full-input" placeholder="CARGO / FUNÇÃO">
 
         <section class="signature-section">
-          <h2>⚠️ ⚠️ Para cadastrar sua assinatura, siga as instruções: <span class="req">*</span></h2>
-          <ol>
-            <li>Assine em uma folha branca.</li>
-            <li>Tire uma foto nítida.</li>
-            <li>Faça o upload abaixo.</li>
-          </ol>
-          <div class="upload-zone">
-            <svg class="icon-file" viewBox="0 0 24 24">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <path d="M10 18l5-5h-3V9h-4v4H5l5 5z"/>
-            </svg>
-            <p>PDF, Document ou Imagem (Máx 10 MB).</p>
-            <div class="upload-action">
-              <label class="btn-file">
-                <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
-                <span>⤒ Adicionar arquivo</span>
-              </label>
-              <span v-if="arquivoNome" class="file-name">{{ arquivoNome }}</span>
+          <div class="signature-header">
+            <h2>✍🏼 Assinatura do Usuário <span class="req">*</span></h2>
+            <p class="instructions-text">Arraste a foto da assinatura ou clique abaixo.</p>
+          </div>
+          <div class="upload-container" :class="{ 'has-file': arquivoOriginal, 'drag-active': dragAtivo }" @dragover.prevent="dragAtivo = true" @dragleave.prevent="dragAtivo = false" @drop.prevent="handleDrop">
+            <div v-if="!arquivoPreview" class="upload-placeholder">
+              <svg class="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              <p>Máx 8MB (JPG, PNG, PDF)</p>
             </div>
-            <img v-if="arquivoPreview" :src="arquivoPreview" class="preview">
+            <div v-else class="preview-container">
+              <img :src="arquivoPreview" class="signature-preview">
+              <button type="button" @click="resetArquivo" class="btn-remove">✕</button>
+            </div>
+            <div class="upload-controls">
+              <label class="btn-upload">
+                <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
+                <span>{{ arquivoOriginal ? '🔄 Alterar' : '⤒ Selecionar' }}</span>
+              </label>
+              <div v-if="arquivoNome" class="file-info">{{ arquivoNome }}</div>
+            </div>
           </div>
         </section>
 
@@ -255,48 +255,42 @@ const exportarCSV = async () => {
 </template>
 
 <style scoped>
-.page-bg { background: #f1f5f9; min-height: 100vh; padding: 40px 20px; font-family: 'Inter', sans-serif; }
+.page-bg { background: #f1f5f9; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; }
 .main-card { max-width: 750px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; }
-.banner { background: #2563eb; padding: 35px; text-align: center; }
-.banner h1 { color: white; margin: 0; font-size: 24px; font-weight: 800; font-style: italic; }
-.form-body { padding: 40px; }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
-.grid-location { display: grid; grid-template-columns: 100px 1fr; gap: 15px; margin-bottom: 20px; }
+.banner { background: #2563eb; padding: 30px; text-align: center; color: white; }
+.banner h1 { margin: 0; font-size: 22px; font-weight: 800; font-style: italic; }
+.form-body { padding: 30px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 15px; }
+.grid-location { display: grid; grid-template-columns: 80px 1fr; gap: 12px; margin-bottom: 15px; }
 
-input, select, button, textarea { font-family: 'Inter', sans-serif; font-size: 14px; }
-input, select { padding: 14px; border: 1px solid #e2e8f0; border-radius: 10px; width: 100%; box-sizing: border-box; }
-.full-input { width: 100%; margin-bottom: 20px; box-sizing: border-box; }
+input, select { padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; width: 100%; box-sizing: border-box; }
+.full-input { margin-bottom: 15px; }
 
-.selection-area label { display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 10px; text-align: left; }
-.selection-area button { padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; cursor: pointer; font-size: 11px; text-align: left; width: 100%; }
+.selection-area label { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 8px; text-transform: uppercase; }
+.selection-area button { padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: white; cursor: pointer; font-size: 11px; width: 100%; text-align: left; }
 .selection-area button.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; font-weight: 600; }
 
-.signature-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 15px; padding: 25px; margin-bottom: 30px; text-align: left;}
-.req { color: red; }
-ol { font-size: 13px; color: #64748b; font-style: italic; padding-left: 20px; }
-.upload-zone { display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 15px; }
-.icon-file { width: 60px; stroke: #000; fill: none; margin-bottom: 10px; }
-.btn-file { border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 8px; cursor: pointer; color: #2563eb; font-weight: 600; background: #fff; }
-.preview { height: 60px; margin-top: 15px; border: 1px solid #ddd; padding: 4px; background: #fff; }
+.signature-section { border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0; background: #f8fafc; }
+.instructions-text { font-size: 12px; color: #64748b; margin-bottom: 15px; }
+.upload-container { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; align-items: center; background: white; transition: 0.2s; }
+.upload-container.drag-active { border-color: #2563eb; background: #eff6ff; }
+.icon-upload { width: 32px; color: #94a3b8; margin-bottom: 8px; }
+.signature-preview { max-height: 100px; border-radius: 4px; margin-bottom: 10px; }
+.preview-container { position: relative; }
+.btn-remove { position: absolute; top: -5px; right: -5px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 10px; }
 
-.btn-submit { width: 100%; padding: 20px; background: #2563eb; color: white; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; }
-.btn-submit:disabled { background: #94a3b8; cursor: not-allowed; }
-
-.loader { width: 20px; height: 20px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
+.btn-submit { width: 100%; padding: 18px; background: #2563eb; color: white; border: none; border-radius: 10px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+.btn-submit:disabled { background: #94a3b8; }
+.loader { width: 18px; height: 18px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; animation: rotation 1s linear infinite; }
 @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-.success-screen { padding: 40px; }
-.alert-box { background: #fffbeb; border: 1px solid #fde68a; padding: 25px; border-radius: 15px; text-align: left; }
-.credentials { background: white; padding: 15px; border-radius: 10px; margin: 15px 0; border: 1px solid #eee; }
-.btn-group { display: flex; gap: 10px; }
-.btn-pdf { flex: 1; padding: 15px; background: #059669; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-.btn-csv { flex: 1; padding: 15px; background: #1e293b; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-.btn-new { flex: 1; padding: 15px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-.file-name { font-size: 11px; color: #2563eb; margin-top: 5px; }
-
-@media (max-width: 600px) {
-  .grid-2 { grid-template-columns: 1fr; }
-  .grid-location { grid-template-columns: 70px 1fr; }
-  .btn-group { flex-direction: column; }
-}
+.success-screen { padding: 30px; }
+.alert-box { background: #fffbeb; border: 1px solid #fde68a; padding: 20px; border-radius: 12px; }
+.credentials { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #eee; font-size: 13px; }
+.btn-group { display: flex; gap: 8px; }
+.btn-group button { flex: 1; padding: 12px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; font-size: 12px; }
+.btn-pdf { background: #059669; }
+.btn-csv { background: #1e293b; }
+.btn-new { background: #2563eb; }
+.req { color: red; }
 </style>
