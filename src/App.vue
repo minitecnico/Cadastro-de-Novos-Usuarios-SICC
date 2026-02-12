@@ -173,8 +173,8 @@ const exportarCSV = async () => {
             <p><strong>Login:</strong> {{ form.cpf }} | <strong>Senha:</strong> 123456</p>
           </div>
           <div class="btn-group">
-            <button @click="gerarPDF" class="btn-pdf">disabled </button>
-            <button @click="exportarCSV" class="btn-csv">disabled </button>
+            <button @click="disabled" class="btn-pdf"> </button>
+            <button @click="disabled" class="btn-csv"> </button>
             <button @click="reset" class="btn-new">NOVO CADASTRO</button>
           </div>
         </div>
