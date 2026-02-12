@@ -222,28 +222,41 @@ const exportarCSV = async () => {
         <input v-model="form.cargo" required class="full-input" placeholder="CARGO / FUNÇÃO">
 
         <section class="signature-section">
-          <div class="signature-header">
-            <h2>✍🏼 Assinatura do Usuário <span class="req">*</span></h2>
-            <p class="instructions-text">Arraste a foto da assinatura ou clique abaixo.</p>
-          </div>
-          <div class="upload-container" :class="{ 'has-file': arquivoOriginal, 'drag-active': dragAtivo }" @dragover.prevent="dragAtivo = true" @dragleave.prevent="dragAtivo = false" @drop.prevent="handleDrop">
-            <div v-if="!arquivoPreview" class="upload-placeholder">
-              <svg class="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-              <p>Máx 8MB (JPG, PNG, PDF)</p>
-            </div>
-            <div v-else class="preview-container">
-              <img :src="arquivoPreview" class="signature-preview">
-              <button type="button" @click="resetArquivo" class="btn-remove">✕</button>
-            </div>
-            <div class="upload-controls">
-              <label class="btn-upload">
-                <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
-                <span>{{ arquivoOriginal ? '🔄 Alterar'}}</span>
-              </label>
-              <div v-if="arquivoNome" class="file-info">{{ arquivoNome }}</div>
-            </div>
-          </div>
-        </section>
+  <div class="signature-header">
+    <h2>✍🏼 Assinatura do Usuário <span class="req">*</span></h2>
+    <p class="instructions-text">Assine em papel branco, tire uma foto nítida e anexe abaixo.</p>
+  </div>
+
+  <div 
+    class="upload-container" 
+    :class="{ 'has-file': arquivoOriginal, 'drag-active': dragAtivo }"
+    @dragover.prevent="dragAtivo = true"
+    @dragleave.prevent="dragAtivo = false"
+    @drop.prevent="handleDrop"
+  >
+    <div v-if="!arquivoPreview" class="upload-placeholder">
+      <div class="dashed-box">
+        <svg class="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        <p>Tamanho max. 6MB</p>
+        <p class="sub-text">Toque para selecionar</p>
+      </div>
+    </div>
+
+    <div v-else class="preview-container">
+      <img :src="arquivoPreview" class="signature-preview">
+      <button type="button" @click="resetArquivo" class="btn-remove">✕</button>
+    </div>
+
+    <div class="upload-controls">
+      <label class="btn-upload">
+        <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
+        <span>{{ arquivoOriginal ? 'ALTERAR ASSINATURA' : 'SELECIONAR' }}</span>
+      </label>
+      <div v-if="arquivoNome" class="file-info">{{ arquivoNome }}</div>
+    </div>
+  </div>
 
         <button type="submit" :disabled="carregando" class="btn-submit">
           <span v-if="!carregando">FINALIZAR CADASTRO</span>
@@ -270,17 +283,105 @@ input, select { padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; wi
 .selection-area button { padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: white; cursor: pointer; font-size: 11px; width: 100%; text-align: left; }
 .selection-area button.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; font-weight: 600; }
 
-.signature-section { border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0; background: #f8fafc; }
-.instructions-text { font-size: 12px; color: #64748b; margin-bottom: 15px; }
-.upload-container { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; align-items: center; background: white; transition: 0.2s; }
-.upload-container.drag-active { border-color: #2563eb; background: #eff6ff; }
-.icon-upload { width: 32px; color: #94a3b8; margin-bottom: 8px; }
-.signature-preview { max-height: 100px; border-radius: 4px; margin-bottom: 10px; }
-.preview-container { position: relative; }
-.btn-remove { position: absolute; top: -5px; right: -5px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 10px; }
+.signature-section { 
+  background: #ffffff; 
+  border: 1px solid #e2e8f0; 
+  border-radius: 12px; 
+  padding: 25px; 
+  margin: 20px 0; 
+  text-align: center; 
+}
+
+.instructions-text { 
+  font-size: 13px; 
+  color: #64748b; 
+  margin: 8px 0 20px 0; 
+}
+
+.upload-container { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 15px; 
+}
+
+.upload-placeholder {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 30px;
+  width: 220px;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.upload-container.drag-active .upload-placeholder { 
+  border-color: #2563eb; 
+  background: #eff6ff; 
+  transform: scale(1.02);
+}
+
+.icon-upload { 
+  width: 35px; 
+  height: 35px;
+  color: #64748b; 
+  margin-bottom: 10px; 
+}
+
+.upload-placeholder p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.signature-preview { 
+  max-height: 120px; 
+  max-width: 250px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px; 
+  padding: 5px;
+  background: white;
+}
+
+.preview-container { position: relative; display: inline-block; }
+
+.btn-remove { 
+  position: absolute; 
+  top: -10px; 
+  right: -10px; 
+  background: #ef4444; 
+  color: white; 
+  border: none; 
+  border-radius: 50%; 
+  width: 24px; 
+  height: 24px; 
+  cursor: pointer; 
+  font-size: 12px; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-upload {
+  background: #2563eb;
+  color: white;
+  padding: 12px 25px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-block;
+  transition: 0.2s;
+}
+
+.btn-upload:hover { background: #1d4ed8; }
 
 .btn-submit { width: 100%; padding: 18px; background: #2563eb; color: white; border: none; border-radius: 10px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; }
 .btn-submit:disabled { background: #94a3b8; }
+
 .loader { width: 18px; height: 18px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; animation: rotation 1s linear infinite; }
 @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
