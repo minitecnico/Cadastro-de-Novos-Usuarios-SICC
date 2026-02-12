@@ -238,7 +238,7 @@ const exportarCSV = async () => {
             <div class="upload-controls">
               <label class="btn-upload">
                 <input type="file" hidden @change="handleFileUpload" accept="image/*,application/pdf">
-                <span>{{ arquivoOriginal ? '🔄 Alterar' : '⤒ Selecionar' }}</span>
+                <span>{{ arquivoOriginal ? '🔄 Alterar'}}</span>
               </label>
               <div v-if="arquivoNome" class="file-info">{{ arquivoNome }}</div>
             </div>
